@@ -28,7 +28,6 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-import static org.openqa.selenium.devtools.v114.page.Page.captureScreenshot;
 
 
 @RunWith(Parameterized.class)
@@ -36,24 +35,26 @@ public class NewAirbnbTest {
     private static Object[][] inputData = null;
     final LocalDate TODAY = LocalDate.now();
     private static WebDriver driver;
-    private String locationInput;
-    private int yearInput;
-    private int checkInMonthInput;
-    private int checkInDayInput;
-    private int checkOutMonthInput;
-    private int checkOutDayInput;
-    private int adultsInput;
-    private int childrenInput;
-    private int infantsInput;
-    private int petsInput;
-    private String expectedResult;
+    private static String locationInput;
+    private static int yearInput;
+    private static int checkInMonthInput;
+    private static int checkInDayInput;
+    private static int checkOutMonthInput;
+    private static int checkOutDayInput;
+    private static int adultsInput;
+    private static int childrenInput;
+    private static int infantsInput;
+    private static int petsInput;
+    private  String expectedResult;
+
+
 
     private static int CurrentTestIndex = 0;
 
     @SuppressWarnings("ConstantConditions")
     @Parameterized.Parameters
     public static Object[][] data() {
-        int dataSource = 0;
+        int dataSource = 1; // 0: use hard-coded data; 1: use data from input.txt
         if (dataSource == 0) {
             return new Object[][]{{"Ottawa", 2023, 7, 17, 8, 10, 2, 6, 4, 5, "Ottawa"}};
         } else if (dataSource == 1) {
@@ -84,7 +85,7 @@ public class NewAirbnbTest {
     public void setUp() {
         CurrentTestIndex++;
         ChromeOptions options = new ChromeOptions();
-        boolean headlessEnabled = false;
+        boolean headlessEnabled = true; // set to true to enable headless mode
         if (headlessEnabled) {
             options.addArguments("--headless");
             Dimension windowsSize = new Dimension(1920, 1080);
@@ -101,7 +102,7 @@ public class NewAirbnbTest {
     @SuppressWarnings("ConstantConditions")
     @After
     public void tearDown() throws InterruptedException {
-        boolean ObservationEnabled = true;
+        boolean ObservationEnabled = false; // set to true to have a timeout before closing the browser, so we can observe what happened
         if (ObservationEnabled) {
             Thread.sleep(5000);
         }
@@ -117,6 +118,9 @@ public class NewAirbnbTest {
                 throw new IllegalArgumentException("Check-in day cannot be after check-out day");
             }
             HomePage homePage = new HomePage(driver);
+            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+            wait.until(ExpectedConditions.visibilityOfAllElements(homePage.locationInputButton));
+            wait.until(ExpectedConditions.elementToBeClickable(homePage.locationInputButton));
             homePage.setLocationInput(locationInput);
             xpathDateInfo checkinInfo = xpathConstructor(yearInput, checkInMonthInput, checkInDayInput);
             String checkinXpath = checkinInfo.getXpath();
@@ -124,13 +128,12 @@ public class NewAirbnbTest {
             if (monthDifference > 1) {
                 clickMultipleTimes(homePage.NextMonthButton, monthDifference - 1);
             }
-            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
             By checkInDateOptionLocator = By.xpath(checkinXpath);
             wait.until(ExpectedConditions.visibilityOfElementLocated(checkInDateOptionLocator));
             wait.until(ExpectedConditions.elementToBeClickable(checkInDateOptionLocator));
             WebElement checkinInput = driver.findElement(By.xpath(checkinXpath));
             checkinInput.click();
-
             xpathDateInfo checkoutInfo = xpathConstructor(yearInput, checkOutMonthInput, checkOutDayInput);
             String checkoutXpath = checkoutInfo.getXpath();
             int monthDifference2 = checkoutInfo.getClicks();
@@ -148,7 +151,7 @@ public class NewAirbnbTest {
             assert (resultText.contains(expectedResult)) : "Test case failed: result doesn't contains required location\n" + resultText;
         }catch (Exception e){
             System.out.println("Test case failed: " + CurrentTestIndex);
-            captureScreenshot(driver);
+            captureScreenshotAndError(driver, e);
             System.out.println(locationInput + " " + yearInput + " " + checkInMonthInput + " " + checkInDayInput + " " + checkOutMonthInput + " " + checkOutDayInput + " " + adultsInput + " " + childrenInput + " " + infantsInput + " " + petsInput);
             throw new TestFailedException(e.getMessage(), e);
         }
@@ -167,16 +170,19 @@ public class NewAirbnbTest {
             super(message, cause);
         }
     }
-    private static void captureScreenshot(WebDriver driver) {
+    private static void captureScreenshotAndError(WebDriver driver, Exception e) {
         // save screenshot to specific location
         File screenshotFile = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-        Path destinationPath = Path.of("screenshots", String.valueOf(CurrentTestIndex),"failure.png"); // 设置保存路径和文件名
+        Path savePath = Path.of("ErrorRecord", String.valueOf(CurrentTestIndex));
+        Path screenshotsPath = savePath.resolve("failure.png");
+        Path textPath = savePath.resolve("failure.txt");
         try {
-            Files.createDirectories(destinationPath.getParent()); // 创建目录（如果不存在）
-            Files.copy(screenshotFile.toPath(), destinationPath, StandardCopyOption.REPLACE_EXISTING);
-            System.out.println("Screenshot saved: " + destinationPath.toAbsolutePath());
-        } catch (IOException e) {
-            e.printStackTrace();
+            Files.createDirectories(screenshotsPath.getParent()); // 创建目录（如果不存在）
+            Files.copy(screenshotFile.toPath(), screenshotsPath, StandardCopyOption.REPLACE_EXISTING);
+            Files.writeString(textPath, "Test case failed: "+ e + "\n" + CurrentTestIndex + "\n" + locationInput + " " + yearInput + " " + checkInMonthInput + " " + checkInDayInput + " " + checkOutMonthInput + " " + checkOutDayInput + " " + adultsInput + " " + childrenInput + " " + infantsInput + " " + petsInput);
+            System.out.println("Screenshot&text saved to: " + savePath.toAbsolutePath());
+        } catch (IOException ee) {
+            ee.printStackTrace();
         }
     }
 
